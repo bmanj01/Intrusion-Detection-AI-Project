@@ -1,0 +1,40 @@
+{
+  "classification_report": {
+    "anomaly": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 92000.0
+    },
+    "normal": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 96196.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 188196.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 188196.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      92000,
+      0
+    ],
+    [
+      0,
+      96196
+    ]
+  ],
+  "auc": 1.0
+}
