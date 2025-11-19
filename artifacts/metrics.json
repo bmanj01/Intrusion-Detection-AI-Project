@@ -8,25 +8,25 @@
       "f1-score": 1.0,
       "precision": 1.0,
       "recall": 1.0,
-      "support": 66902.0
+      "support": 24688.0
     },
     "macro avg": {
       "f1-score": 1.0,
       "precision": 1.0,
       "recall": 1.0,
-      "support": 100000.0
+      "support": 60000.0
     },
     "normal": {
       "f1-score": 1.0,
       "precision": 1.0,
       "recall": 1.0,
-      "support": 33098.0
+      "support": 35312.0
     },
     "weighted avg": {
       "f1-score": 1.0,
       "precision": 1.0,
       "recall": 1.0,
-      "support": 100000.0
+      "support": 60000.0
     }
   }
 }

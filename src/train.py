@@ -70,7 +70,11 @@ def main(args):
     log(f"Loading dataset from {args.data} ...")
     df = load_csv(args.data)
 
-    # normalise column names
+    # Clean infinite values (important for IDS 2025 and similar datasets)
+    log("Replacing inf/-inf with NaN in the entire dataframe ...")
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    # Normalise column names (remove spaces etc.)
     df.columns = df.columns.str.strip().str.replace(r"\s+", "_", regex=True)
     target = args.target.strip().replace(" ", "_")
 
@@ -114,7 +118,7 @@ def main(args):
             (
                 "rf",
                 RandomForestClassifier(
-                    n_estimators=200,  # slightly reduced for speed
+                    n_estimators=200,  # good balance of performance/speed
                     max_depth=None,
                     min_samples_split=2,
                     min_samples_leaf=1,
@@ -127,8 +131,8 @@ def main(args):
         ]
     )
 
-    # === CROSS-VALIDATION ON A SUBSET ===
-    MAX_CV_SAMPLES = 200_000  # cap for CV subset
+    # === CROSS-VALIDATION ON A SUBSET (FOR LARGE DATASETS) ===
+    MAX_CV_SAMPLES = 200_000  # cap number of rows used for CV
 
     if len(X_train) > MAX_CV_SAMPLES:
         log(
@@ -257,7 +261,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data",
         required=True,
-        help="Path to labelled CSV file (e.g., data/raw/NF-UQ-NIDS-sample.csv)",
+        help="Path to labelled CSV file (e.g., data/raw/IDS2025_merged.csv)",
     )
     parser.add_argument(
         "--target",
