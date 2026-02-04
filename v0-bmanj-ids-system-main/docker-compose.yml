@@ -1,0 +1,10 @@
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      AI_API_URL: "http://host.docker.internal:8000/predict"
+    restart: unless-stopped
