@@ -5,18 +5,23 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("analyses")
-    .select("anomaly_score")
+    .select("anomaly_score,predicted_label")
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(1000);
 
   if (error) {
     console.error("Error fetching analysis scores:", error);
     return NextResponse.json({ scores: [] }, { status: 200 });
   }
 
-  const scores = (data || [])
+  const rows = data || [];
+  const scores = rows
+    .map((row) => Number(row.anomaly_score))
+    .filter((n) => Number.isFinite(n));
+  const normalScores = rows
+    .filter((row) => String(row.predicted_label || "").toUpperCase() === "NORMAL")
     .map((row) => Number(row.anomaly_score))
     .filter((n) => Number.isFinite(n));
 
-  return NextResponse.json({ scores });
+  return NextResponse.json({ scores, normalScores });
 }

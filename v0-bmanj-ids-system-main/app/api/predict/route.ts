@@ -62,9 +62,6 @@ export async function POST(req: Request) {
         ? (data as { results: UpstreamResponse[] }).results[0]
         : data;
 
-    const labelRaw = (payload?.predicted_label || "").toUpperCase();
-    const predicted_label = labelRaw === "ANOMALY" ? "ANOMALY" : "NORMAL";
-
     const hasScore = typeof payload?.anomaly_score === "number";
     const hasProba =
       payload?.raw_proba &&
@@ -83,6 +80,8 @@ export async function POST(req: Request) {
     }
 
     const anomaly_score = hasScore ? payload!.anomaly_score! : payload!.raw_proba!.anomaly!;
+    const effectiveThreshold = Number(settings.anomalyThreshold) || 0.45;
+    const predicted_label = anomaly_score >= effectiveThreshold ? "ANOMALY" : "NORMAL";
     const raw_proba = hasProba
       ? payload!.raw_proba!
       : { anomaly: anomaly_score, normal: 1 - anomaly_score };

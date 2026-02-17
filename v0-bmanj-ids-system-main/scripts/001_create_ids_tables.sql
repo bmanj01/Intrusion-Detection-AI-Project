@@ -67,7 +67,8 @@ CREATE POLICY "analyses_insert" ON analyses FOR INSERT WITH CHECK (true);
 
 -- Default settings
 INSERT INTO settings (key, value) VALUES 
-  ('anomalyThreshold', '0.7'),
+  ('anomalyThreshold', '0.45'),
+  ('autoSmartThreshold', 'true'),
   ('autoCreateAlert', 'true'),
   ('apiUrl', '"http://localhost:8000/predict"')
 ON CONFLICT (key) DO NOTHING;

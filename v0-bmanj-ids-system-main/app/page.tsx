@@ -68,6 +68,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import {
@@ -78,6 +93,7 @@ import {
   updateSettings,
   clearLogs,
   type Alert,
+  type Analysis,
   type Log,
   type Settings as AppSettings,
 } from "./actions";
@@ -277,6 +293,9 @@ export default function NIDSApp() {
 const { data: alerts = [], isLoading: alertsLoading } = useSWR<Alert[]>("/api/alerts", fetcher, {
   refreshInterval: 5000,
 });
+const { data: analyses = [], isLoading: analysesLoading } = useSWR<Analysis[]>("/api/analyses", fetcher, {
+  refreshInterval: 5000,
+});
 const { data: logs = [], isLoading: logsLoading } = useSWR<Log[]>("/api/logs", fetcher, {
   refreshInterval: 5000,
 });
@@ -328,6 +347,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
   const [alertSeverityFilter, setAlertSeverityFilter] = useState<string>("all");
   const [alertStatusFilter, setAlertStatusFilter] = useState<string>("all");
   const [alertSearch, setAlertSearch] = useState("");
+  const [alertsView, setAlertsView] = useState<"analyses" | "alerts">("analyses");
 
   // Modal state
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
@@ -341,6 +361,37 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
     normalTraffic: stats?.normalTraffic ?? 0,
     avgResponseTime: stats?.avgResponseTime ?? 45,
   };
+  const safeAnalyses = Array.isArray(analyses) ? analyses : [];
+  const recentAnalysedWindow = safeAnalyses.slice(0, 200);
+  const recentAnomalyCount = recentAnalysedWindow.filter((a) => a.predicted_label === "ANOMALY").length;
+  const recentNormalCount = recentAnalysedWindow.length - recentAnomalyCount;
+  const dashboardPieData = [
+    { name: "Anomaly", value: recentAnomalyCount, color: "oklch(0.65 0.2 30)" },
+    { name: "Normal", value: recentNormalCount, color: "oklch(0.72 0.19 160)" },
+  ];
+  const scoreDistributionData = [
+    { band: "0-20%", count: 0 },
+    { band: "20-40%", count: 0 },
+    { band: "40-60%", count: 0 },
+    { band: "60-80%", count: 0 },
+    { band: "80-100%", count: 0 },
+  ];
+  for (const analysis of recentAnalysedWindow) {
+    const scorePct = Number(analysis.anomaly_score) * 100;
+    if (scorePct < 20) scoreDistributionData[0].count += 1;
+    else if (scorePct < 40) scoreDistributionData[1].count += 1;
+    else if (scorePct < 60) scoreDistributionData[2].count += 1;
+    else if (scorePct < 80) scoreDistributionData[3].count += 1;
+    else scoreDistributionData[4].count += 1;
+  }
+  const recentAnalysedChartData = safeAnalyses
+    .slice(0, 20)
+    .reverse()
+    .map((a, idx) => ({
+      point: idx + 1,
+      score: Number((Number(a.anomaly_score) * 100).toFixed(2)),
+      label: a.predicted_label,
+    }));
 
   // ============== HANDLERS ==============
   const handleAnalyse = useCallback(async () => {
@@ -443,6 +494,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
 
       // Refresh data
       mutate("/api/alerts");
+      mutate("/api/analyses");
       mutate("/api/logs");
       mutate("/api/stats");
     } catch (error) {
@@ -699,6 +751,122 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
         </CardContent>
       </Card>
     </div>
+  );
+
+  const renderRecentAnalysedTable = () => (
+    <Card className="border-border bg-card">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-foreground">Recent Analysed Results</CardTitle>
+            <CardDescription>Latest analysis outcomes (normal and anomaly)</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => mutate("/api/analyses")}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {analysesLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </div>
+        ) : safeAnalyses.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
+            <p>No analysed traffic yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border">
+                  <TableHead className="text-muted-foreground">Time</TableHead>
+                  <TableHead className="text-muted-foreground">Label</TableHead>
+                  <TableHead className="text-muted-foreground text-right">Score</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {safeAnalyses.slice(0, 12).map((analysis) => (
+                  <TableRow key={analysis.id} className="border-border">
+                    <TableCell className="font-mono text-sm text-foreground">
+                      {formatTimestamp(analysis.created_at)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={analysis.predicted_label === "ANOMALY" ? "destructive" : "default"}
+                        className={
+                          analysis.predicted_label === "ANOMALY"
+                            ? ""
+                            : "bg-[oklch(0.72_0.19_160)] text-[oklch(0.13_0.01_260)]"
+                        }
+                      >
+                        {analysis.predicted_label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-foreground text-right">
+                      {(Number(analysis.anomaly_score) * 100).toFixed(2)}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const renderDashboardPieChart = () => (
+    <Card className="bg-[oklch(0.22_0.03_240)]/60 border-[oklch(0.32_0.04_240)]">
+      <CardHeader>
+        <CardTitle className="text-[oklch(0.97_0.01_240)]">Traffic Distribution</CardTitle>
+        <CardDescription>Recent analysed split (last 200 rows)</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {recentAnalysedWindow.length === 0 ? (
+          <div className="text-sm text-[oklch(0.78_0.02_240)]">No analysed data available yet.</div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={dashboardPieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={90}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}
+                    labelLine={false}
+                  >
+                    {dashboardPieData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip formatter={(value: number | string) => [`${value}`, "Count"]} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={scoreDistributionData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.32 0.04 240)" />
+                  <XAxis dataKey="band" tick={{ fill: "oklch(0.85 0.02 240)", fontSize: 12 }} />
+                  <YAxis allowDecimals={false} tick={{ fill: "oklch(0.85 0.02 240)", fontSize: 12 }} />
+                  <RechartsTooltip formatter={(value: number | string) => [`${value}`, "Count"]} />
+                  <Legend />
+                  <Bar dataKey="count" name="Score Distribution" fill="oklch(0.72 0.15 220)" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 
   const renderAnalysePanel = () => (
@@ -1082,64 +1250,154 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
           <div>
             <CardTitle className="text-foreground">Alerts</CardTitle>
             <CardDescription>
-              Manage and review detected anomalies ({alerts.length} total)
+              {alertsView === "analyses"
+                ? `Recent analysed traffic (${safeAnalyses.length} rows)`
+                : `Manage and review detected anomalies (${alerts.length} total alerts)`}
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => mutate("/api/alerts")}>
+            <Select value={alertsView} onValueChange={(v) => setAlertsView(v as "analyses" | "alerts")}>
+              <SelectTrigger className="w-44 bg-secondary border-border">
+                <SelectValue placeholder="View" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="analyses">Recent Analysed</SelectItem>
+                <SelectItem value="alerts">Anomaly Alerts</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => mutate(alertsView === "analyses" ? "/api/analyses" : "/api/alerts")}
+            >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            <Button variant="outline" size="sm" onClick={exportAlertsCSV}>
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
+            {alertsView === "alerts" && (
+              <Button variant="outline" size="sm" onClick={exportAlertsCSV}>
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-2 mt-4">
-          <Select value={alertSeverityFilter} onValueChange={setAlertSeverityFilter}>
-            <SelectTrigger className="w-32 bg-secondary border-border">
-              <SelectValue placeholder="Severity" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Severity</SelectItem>
-              <SelectItem value="High">High</SelectItem>
-              <SelectItem value="Medium">Medium</SelectItem>
-              <SelectItem value="Low">Low</SelectItem>
-            </SelectContent>
-          </Select>
+        {alertsView === "alerts" && (
+          <div className="flex flex-wrap gap-2 mt-4">
+            <Select value={alertSeverityFilter} onValueChange={setAlertSeverityFilter}>
+              <SelectTrigger className="w-32 bg-secondary border-border">
+                <SelectValue placeholder="Severity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Severity</SelectItem>
+                <SelectItem value="High">High</SelectItem>
+                <SelectItem value="Medium">Medium</SelectItem>
+                <SelectItem value="Low">Low</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Select value={alertStatusFilter} onValueChange={setAlertStatusFilter}>
-            <SelectTrigger className="w-36 bg-secondary border-border">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="New">New</SelectItem>
-              <SelectItem value="Acknowledged">Acknowledged</SelectItem>
-              <SelectItem value="Resolved">Resolved</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select value={alertStatusFilter} onValueChange={setAlertStatusFilter}>
+              <SelectTrigger className="w-36 bg-secondary border-border">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="New">New</SelectItem>
+                <SelectItem value="Acknowledged">Acknowledged</SelectItem>
+                <SelectItem value="Resolved">Resolved</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Input
-            placeholder="Search actions..."
-            value={alertSearch}
-            onChange={(e) => setAlertSearch(e.target.value)}
-            className="w-48 bg-secondary border-border"
-          />
-        </div>
+            <Input
+              placeholder="Search actions..."
+              value={alertSearch}
+              onChange={(e) => setAlertSearch(e.target.value)}
+              className="w-48 bg-secondary border-border"
+            />
+          </div>
+        )}
       </CardHeader>
       <CardContent>
-        {alertsLoading ? (
+        {alertsView === "analyses" ? (
+          analysesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            </div>
+          ) : safeAnalyses.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p>No analysed traffic rows yet</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="h-56 w-full rounded-md border border-border p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={recentAnalysedChartData} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="point" tickLine={false} axisLine={false} />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      domain={[0, 100]}
+                      tickFormatter={(v) => `${v}%`}
+                      width={42}
+                    />
+                    <RechartsTooltip
+                      formatter={(value: number, _name: string, item: { payload?: { label?: string } }) => [
+                        `${Number(value).toFixed(2)}%`,
+                        item?.payload?.label || "score",
+                      ]}
+                      labelFormatter={(label: number) => `Sample ${label}`}
+                    />
+                    <Line type="monotone" dataKey="score" stroke="var(--primary)" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-border">
+                      <TableHead className="text-muted-foreground">Time</TableHead>
+                      <TableHead className="text-muted-foreground">Label</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Score</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {safeAnalyses.slice(0, 100).map((analysis) => (
+                      <TableRow key={analysis.id} className="border-border">
+                        <TableCell className="font-mono text-sm text-foreground">
+                          {formatTimestamp(analysis.created_at)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={analysis.predicted_label === "ANOMALY" ? "destructive" : "default"}
+                            className={
+                              analysis.predicted_label === "ANOMALY"
+                                ? ""
+                                : "bg-[oklch(0.72_0.19_160)] text-[oklch(0.13_0.01_260)]"
+                            }
+                          >
+                            {analysis.predicted_label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-foreground text-right">
+                          {(Number(analysis.anomaly_score) * 100).toFixed(2)}%
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )
+        ) : alertsLoading ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
         ) : filteredAlerts.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Bell className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>No alerts match your filters</p>
+            <p>No anomaly alerts match your filters</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -1715,6 +1973,8 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
                   </p>
                 </div>
                 {renderOverviewCards()}
+                {renderDashboardPieChart()}
+                {renderRecentAnalysedTable()}
                 {renderHowItWorks()}
               </>
             )}

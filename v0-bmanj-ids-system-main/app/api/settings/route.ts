@@ -11,10 +11,10 @@ export async function GET() {
   }
 
   const defaults = {
-    anomalyThreshold: 0.7,
+    anomalyThreshold: 0.45,
     autoCreateAlert: true,
     apiUrl: "http://localhost:8000/predict",
-    autoSmartThreshold: false,
+    autoSmartThreshold: true,
   };
 
   const settingsObj: Record<string, unknown> = {};

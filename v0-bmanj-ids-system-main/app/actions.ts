@@ -223,10 +223,10 @@ export async function getSettings(): Promise<Settings> {
   const { data, error } = await supabase.from("settings").select("*");
 
   const defaults: Settings = {
-    anomalyThreshold: 0.7,
+    anomalyThreshold: 0.45,
     autoCreateAlert: true,
     apiUrl: "http://localhost:8000/predict",
-    autoSmartThreshold: false,
+    autoSmartThreshold: true,
   };
 
   if (error || !data) {
@@ -295,8 +295,8 @@ export async function getStats() {
   const analyses = analysesRes.data || [];
 
   const totalRequests = analyses.length;
-  const anomalies = alerts.length;
-  const normalTraffic = analyses.filter((a) => a.predicted_label === "Normal").length;
+  const anomalies = analyses.filter((a) => String(a.predicted_label || "").toUpperCase() === "ANOMALY").length;
+  const normalTraffic = analyses.filter((a) => String(a.predicted_label || "").toUpperCase() === "NORMAL").length;
 
   return {
     totalRequests,
