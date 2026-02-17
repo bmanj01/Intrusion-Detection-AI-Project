@@ -1,12 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
+import { withSupabaseReadRetry } from "@/lib/supabase/retry";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("alerts")
-    .select("*")
-    .order("time", { ascending: false });
+  const { data, error } = await withSupabaseReadRetry(() =>
+    supabase
+      .from("alerts")
+      .select("*")
+      .order("time", { ascending: false })
+      .limit(200)
+  );
 
   if (error) {
     console.error("[v0] Error fetching alerts:", error);

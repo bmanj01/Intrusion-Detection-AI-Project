@@ -1,13 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
+import { withSupabaseReadRetry } from "@/lib/supabase/retry";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("analyses")
-    .select("anomaly_score,predicted_label")
-    .order("created_at", { ascending: false })
-    .limit(1000);
+  const { data, error } = await withSupabaseReadRetry(() =>
+    supabase
+      .from("analyses")
+      .select("anomaly_score,predicted_label")
+      .order("created_at", { ascending: false })
+      .limit(1000)
+  );
 
   if (error) {
     console.error("Error fetching analysis scores:", error);

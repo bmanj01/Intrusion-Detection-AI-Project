@@ -300,7 +300,7 @@ const { data: logs = [], isLoading: logsLoading } = useSWR<Log[]>("/api/logs", f
   refreshInterval: 5000,
 });
 const { data: settings, isLoading: settingsLoading } = useSWR<AppSettings>("/api/settings", fetcher);
-const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; normalTraffic: number; totalAlerts: number }>("/api/stats", fetcher, { refreshInterval: 10000 });
+const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; normalTraffic: number; totalAlerts: number; avgResponseTime?: number }>("/api/stats", fetcher, { refreshInterval: 10000 });
 
   // Local settings state for form
   const [localSettings, setLocalSettings] = useState<AppSettings>({
@@ -355,9 +355,12 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
   const [modelSwitchOpen, setModelSwitchOpen] = useState(false);
 
   // Overview stats from database
+  const safeAlerts = Array.isArray(alerts) ? alerts : [];
+  const safeLogs = Array.isArray(logs) ? logs : [];
+  const newAlertsCount = safeAlerts.filter((a) => a.status === "New").length;
   const overviewStats = {
     totalRequests: stats?.totalRequests ?? 0,
-    detectedAnomalies: stats?.anomalies ?? alerts.length,
+    detectedAnomalies: stats?.anomalies ?? safeAlerts.length,
     normalTraffic: stats?.normalTraffic ?? 0,
     avgResponseTime: stats?.avgResponseTime ?? 45,
   };
@@ -444,7 +447,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
         };
 
         const result = await predictAPI(perItemRequest);
-        const effectiveLabel =
+        const effectiveLabel: PredictionResponse["predicted_label"] =
           result.anomaly_score >= effectiveThreshold ? "ANOMALY" : "NORMAL";
         const effectiveResult = { ...result, predicted_label: effectiveLabel };
         results.push(effectiveResult);
@@ -634,7 +637,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
 
   const exportAlertsCSV = () => {
     const headers = ["Time", "Label", "Anomaly Score", "Severity", "Action", "Status"];
-    const rows = alerts.map((a) => [formatTimestamp(a.time), a.label, a.anomaly_score, a.severity, a.action, a.status]);
+    const rows = safeAlerts.map((a) => [formatTimestamp(a.time), a.label, a.anomaly_score, a.severity, a.action, a.status]);
     const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -647,7 +650,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
 
   const exportLogsCSV = () => {
     const headers = ["Timestamp", "Type", "Message"];
-    const rows = logs.map((l) => [formatTimestamp(l.timestamp), l.type, l.message]);
+    const rows = safeLogs.map((l) => [formatTimestamp(l.timestamp), l.type, l.message]);
     const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -670,7 +673,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
   };
 
   // Filter alerts
-  const filteredAlerts = alerts.filter((alert) => {
+  const filteredAlerts = safeAlerts.filter((alert) => {
     if (alertSeverityFilter !== "all" && alert.severity !== alertSeverityFilter) return false;
     if (alertStatusFilter !== "all" && alert.status !== alertStatusFilter) return false;
     if (alertSearch && !alert.action.toLowerCase().includes(alertSearch.toLowerCase())) return false;
@@ -711,7 +714,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
           </div>
           <div className="flex items-center gap-1 mt-2 text-xs text-destructive">
             <TrendingUp className="h-3 w-3" />
-            <span>{alerts.filter((a) => a.status === "New").length} new alerts</span>
+            <span>{newAlertsCount} new alerts</span>
           </div>
         </CardContent>
       </Card>
@@ -1252,7 +1255,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
             <CardDescription>
               {alertsView === "analyses"
                 ? `Recent analysed traffic (${safeAnalyses.length} rows)`
-                : `Manage and review detected anomalies (${alerts.length} total alerts)`}
+                : `Manage and review detected anomalies (${safeAlerts.length} total alerts)`}
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1503,14 +1506,14 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
-        ) : logs.length === 0 ? (
+        ) : safeLogs.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <ScrollText className="h-12 w-12 mx-auto mb-2 opacity-50" />
             <p>No logs yet. Run an analysis to see activity.</p>
           </div>
         ) : (
           <div className="space-y-2 max-h-96 overflow-y-auto">
-            {logs.map((log) => (
+            {safeLogs.map((log) => (
               <div
                 key={log.id}
                 className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50"
@@ -1942,9 +1945,9 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
                 >
                   <Icon className="h-5 w-5" />
                   <span>{item.label}</span>
-                  {item.id === "alerts" && alerts.filter((a) => a.status === "New").length > 0 && (
+                  {item.id === "alerts" && newAlertsCount > 0 && (
                     <Badge variant="destructive" className="ml-auto text-xs">
-                      {alerts.filter((a) => a.status === "New").length}
+                      {newAlertsCount}
                     </Badge>
                   )}
                 </button>
