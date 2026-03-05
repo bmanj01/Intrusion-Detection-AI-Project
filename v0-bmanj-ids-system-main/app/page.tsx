@@ -245,7 +245,17 @@ async function predictAPI(request: PredictionRequest): Promise<PredictionRespons
 
 // ============== HELPER FUNCTIONS ==============
 function formatTimestamp(date?: string): string {
-  return date ? new Date(date).toLocaleString() : new Date().toLocaleString();
+  if (!date) return new Date().toLocaleString("en-GB", { hour12: false });
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleString("en-GB", { hour12: false });
+}
+
+function formatAlertTimestampUk(date?: string): string {
+  if (!date) return new Date().toLocaleString("en-GB", { hour12: false });
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleString("en-GB", { hour12: false });
 }
 
 function getSeverity(score: number): "Low" | "Medium" | "High" {
@@ -637,7 +647,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
 
   const exportAlertsCSV = () => {
     const headers = ["Time", "Label", "Anomaly Score", "Severity", "Action", "Status"];
-    const rows = safeAlerts.map((a) => [formatTimestamp(a.time), a.label, a.anomaly_score, a.severity, a.action, a.status]);
+    const rows = safeAlerts.map((a) => [formatAlertTimestampUk(a.time), a.label, a.anomaly_score, a.severity, a.action, a.status]);
     const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -1426,7 +1436,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
                     }}
                   >
                     <TableCell className="font-mono text-sm text-foreground">
-                      {formatTimestamp(alert.time)}
+                      {formatAlertTimestampUk(alert.time)}
                     </TableCell>
                     <TableCell>
                       <Badge variant="destructive">{alert.label}</Badge>
@@ -2060,7 +2070,7 @@ const { data: stats } = useSWR<{ totalRequests: number; anomalies: number; norma
                 <div>
                   <p className="text-muted-foreground">Time</p>
                   <p className="font-medium text-foreground">
-                    {formatTimestamp(selectedAlert.time)}
+                    {formatAlertTimestampUk(selectedAlert.time)}
                   </p>
                 </div>
                 <div>
